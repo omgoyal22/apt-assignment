@@ -27,7 +27,7 @@ npm install
 2. **Configure database**
 Create a `.env` file:
 ```
-MONGODB_URI=mongodb://localhost:27017/realtime_orders
+MONGODB_URI=""
 PORT=3000
 ```
 
