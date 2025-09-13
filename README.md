@@ -19,7 +19,7 @@ A simple order tracking system that updates everyone instantly when orders chang
 
 1. **Download and setup**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/omgoyal22/apt-assignment.git
 cd algo_trading
 npm install
 ```

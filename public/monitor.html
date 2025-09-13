@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Monitor - Real-time Updates</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-connected { background-color: #4CAF50; }
+        .status-disconnected { background-color: #f44336; }
+
+        .navigation {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .nav-link {
+            display: inline-block;
+            padding: 8px 16px;
+            margin-right: 10px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .nav-link:hover {
+            background: #0056b3;
+        }
+
+        .monitor-container {
+            padding: 30px;
+        }
+
+        .activity-feed {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            background: white;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            animation: slideIn 0.5s ease;
+        }
+
+        .activity-item.new { border-left-color: #28a745; }
+        .activity-item.update { border-left-color: #ffc107; }
+        .activity-item.delete { border-left-color: #dc3545; }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .activity-time {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .activity-type {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .activity-type.new { color: #28a745; }
+        .activity-type.update { color: #ffc107; }
+        .activity-type.delete { color: #dc3545; }
+
+        .orders-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .order-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .order-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .order-card.highlight {
+            border-color: #ffc107;
+            background: #fff9c4;
+            animation: pulse 1s ease;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        .order-id {
+            font-weight: 600;
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .order-customer {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .order-product {
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+
+        .order-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-shipped {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .status-delivered {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 5px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            animation: slideInRight 0.3s ease;
+        }
+
+        .notification.success { background: #28a745; }
+        .notification.warning { background: #ffc107; color: #212529; }
+        .notification.error { background: #dc3545; }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Order Monitor Dashboard</h1>
+            <p>Real-time order tracking and activity monitoring</p>
+            <div>
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="connectionText">Connecting...</span>
+            </div>
+        </div>
+
+        <div class="navigation">
+            <a href="/" class="nav-link">📝 Order Management</a>
+            <a href="/monitor.html" class="nav-link" style="background: #28a745;">📊 Monitor Dashboard</a>
+        </div>
+
+        <div class="monitor-container">
+            <div class="stats-bar" id="statsBar">
+                <!-- Stats will be loaded here -->
+            </div>
+
+            <h2>🔔 Live Activity Feed</h2>
+            <div class="activity-feed" id="activityFeed">
+                <div class="empty-state">
+                    <h3>Waiting for activity...</h3>
+                    <p>Make changes in the Order Management page to see real-time updates here!</p>
+                </div>
+            </div>
+
+            <h2>📦 Current Orders</h2>
+            <div class="orders-grid" id="ordersGrid">
+                <!-- Orders will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        const socket = io();
+        let orders = [];
+        let activityLog = [];
+
+        // Connection status
+        socket.on('connect', () => {
+            document.getElementById('connectionStatus').className = 'status-indicator status-connected';
+            document.getElementById('connectionText').textContent = 'Connected';
+            showNotification('Connected to real-time server', 'success');
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
+            document.getElementById('connectionText').textContent = 'Disconnected';
+            showNotification('Disconnected from server', 'error');
+        });
+
+        // Receive initial orders
+        socket.on('initial_orders', (initialOrders) => {
+            orders = initialOrders;
+            renderOrders();
+            loadStats();
+            addActivityItem('system', 'Connected to monitor dashboard', new Date());
+        });
+
+        // Receive real-time updates
+        socket.on('order_update', (update) => {
+            console.log('Real-time update received:', update);
+            
+            const timestamp = new Date();
+            let activityMessage = '';
+            let notificationMessage = '';
+            
+            switch (update.operation) {
+                case 'insert':
+                    orders.unshift(update.data);
+                    activityMessage = `New order created for ${update.data.customer_name} - ${update.data.product_name}`;
+                    notificationMessage = `📦 New Order: ${update.data.customer_name}`;
+                    addActivityItem('new', activityMessage, timestamp, update.data);
+                    showNotification(notificationMessage, 'success');
+                    break;
+                    
+                case 'update':
+                    const updateIndex = orders.findIndex(order => order._id === update.data._id);
+                    if (updateIndex !== -1) {
+                        const oldStatus = orders[updateIndex].status;
+                        orders[updateIndex] = update.data;
+                        activityMessage = `Order ${update.data.customer_name} status changed: ${oldStatus} → ${update.data.status}`;
+                        notificationMessage = `📝 Order Updated: ${update.data.customer_name}`;
+                        addActivityItem('update', activityMessage, timestamp, update.data);
+                        showNotification(notificationMessage, 'warning');
+                        highlightOrder(update.data._id);
+                    }
+                    break;
+                    
+                case 'delete':
+                    const deleteIndex = orders.findIndex(order => order._id === update.data._id);
+                    if (deleteIndex !== -1) {
+                        const deletedOrder = orders[deleteIndex];
+                        orders.splice(deleteIndex, 1);
+                        activityMessage = `Order deleted: ${deletedOrder.customer_name || 'Unknown'} - ${deletedOrder.product_name || 'Unknown'}`;
+                        notificationMessage = `🗑️ Order Deleted`;
+                        addActivityItem('delete', activityMessage, timestamp);
+                        showNotification(notificationMessage, 'error');
+                    }
+                    break;
+            }
+            
+            renderOrders();
+            loadStats();
+        });
+
+        // Add activity item to feed
+        function addActivityItem(type, message, timestamp, orderData = null) {
+            const activity = {
+                type,
+                message,
+                timestamp,
+                orderData
+            };
+            
+            activityLog.unshift(activity);
+            
+            // Keep only last 50 activities
+            if (activityLog.length > 50) {
+                activityLog = activityLog.slice(0, 50);
+            }
+            
+            renderActivityFeed();
+        }
+
+        // Render activity feed
+        function renderActivityFeed() {
+            const activityFeed = document.getElementById('activityFeed');
+            
+            if (activityLog.length === 0) {
+                activityFeed.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Waiting for activity...</h3>
+                        <p>Make changes in the Order Management page to see real-time updates here!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            activityFeed.innerHTML = activityLog.map(activity => `
+                <div class="activity-item ${activity.type}">
+                    <div class="activity-time">${activity.timestamp.toLocaleString()}</div>
+                    <div class="activity-type ${activity.type}">${activity.type.toUpperCase()}</div>
+                    <div class="activity-message">${activity.message}</div>
+                    ${activity.orderData ? `
+                        <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px; font-size: 0.9rem;">
+                            <strong>Order Details:</strong><br>
+                            ID: #${activity.orderData._id.slice(-8)}<br>
+                            Status: <span class="order-status status-${activity.orderData.status}">${activity.orderData.status}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Highlight specific order
+        function highlightOrder(orderId) {
+            setTimeout(() => {
+                const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
+                if (orderCard) {
+                    orderCard.classList.add('highlight');
+                    setTimeout(() => {
+                        orderCard.classList.remove('highlight');
+                    }, 2000);
+                }
+            }, 100);
+        }
+
+        // Load and display statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/orders/stats/summary');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stats = result.data;
+                    const statsBar = document.getElementById('statsBar');
+                    
+                    statsBar.innerHTML = `
+                        <div class="stat-item">
+                            <div class="stat-number">${stats.total}</div>
+                            <div class="stat-label">Total Orders</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${stats.byStatus.pending || 0}</div>
+                            <div class="stat-label">Pending</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${stats.byStatus.shipped || 0}</div>
+                            <div class="stat-label">Shipped</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${stats.byStatus.delivered || 0}</div>
+                            <div class="stat-label">Delivered</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${activityLog.length}</div>
+                            <div class="stat-label">Activities</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Render orders grid
+        function renderOrders() {
+            const ordersGrid = document.getElementById('ordersGrid');
+            
+            if (orders.length === 0) {
+                ordersGrid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
+                        <h3>No orders found</h3>
+                        <p>Create some orders in the Order Management page to see them here!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            ordersGrid.innerHTML = orders.map(order => `
+                <div class="order-card" data-order-id="${order._id}">
+                    <div class="order-id">#${order._id.slice(-8)}</div>
+                    <div class="order-customer">${order.customer_name}</div>
+                    <div class="order-product">📦 ${order.product_name}</div>
+                    <div class="order-status status-${order.status}">${order.status}</div>
+                    <div style="margin-top: 10px; font-size: 0.8rem; color: #6c757d;">
+                        Updated: ${new Date(order.updated_at).toLocaleString()}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Show notification
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 4000);
+        }
+
+        // Load initial data
+        async function loadOrders() {
+            try {
+                const response = await fetch('/api/orders');
+                const result = await response.json();
+                
+                if (result.success) {
+                    orders = result.data;
+                    renderOrders();
+                    loadStats();
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        }
+
+        // Initialize
+        loadOrders();
+    </script>
+</body>
+</html>
