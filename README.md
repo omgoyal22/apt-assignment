@@ -158,8 +158,8 @@ MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/realtime_orders
 
 ```
 algo_trading/
-├── server.js          # Main server
-├── client.js          # CLI interface  
+├──server.js          # Main server
+├── client.js            
 ├── package.json       # Dependencies
 ├── .env              # Your config
 ├── public/           # Web interface
